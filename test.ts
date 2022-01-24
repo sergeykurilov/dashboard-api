@@ -1,14 +1,4 @@
-type coord = {lat: number, long: number}
+const a: bigint = BigInt(100);
+const b: symbol = Symbol('asdsad');
+const c: symbol = Symbol('asdsad');
 
-interface ICoord {
-	lat: number;
-	long: number;
-}
-
-type ID = number | string;
-
-
-
-function compute(coord: ICoord) {
-	
-}
