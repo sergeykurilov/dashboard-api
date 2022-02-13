@@ -36,7 +36,7 @@ export abstract class BaseController {
 			const middleware = route.middlewares?.map((m) => m.execute.bind(m));
 			const handler = route.func.bind(this);
 			const pipeline = middleware ? [...middleware, handler] : handler;
-			this.router[route.method](route.path, handler);
+			this.router[route.method](route.path, pipeline);
 		}
 	}
 }
