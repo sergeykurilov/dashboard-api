@@ -1,12 +1,14 @@
 import { ILogger } from './logger/logger.interface';
 import express, { Express } from 'express';
 import { Server } from 'http';
-import { ExceptionFilter } from './errors/exception.filter';
 
-import { inject, injectable, interfaces } from 'inversify';
-import { UserController } from './users/users.controller';
+import { inject, injectable } from 'inversify';
 import { TYPES } from './types';
 import { json } from 'body-parser';
+import { IConfigService } from './config/config.service.interface';
+import { IExeptionFilter } from './errors/exception.filter.interface';
+import { UserController } from './users/users.controller';
+import { PrismaService } from './database/prisma.service';
 
 @injectable()
 export class App {
@@ -17,7 +19,9 @@ export class App {
 	constructor(
 		@inject(TYPES.ILogger) private logger: ILogger,
 		@inject(TYPES.UserController) private userController: UserController,
-		@inject(TYPES.ExceptionFilter) private exeptionFilter: ExceptionFilter,
+		@inject(TYPES.ExceptionFilter) private exeptionFilter: IExeptionFilter,
+		@inject(TYPES.ConfigService) private configService: IConfigService,
+		@inject(TYPES.PrismaService) private prismaService: PrismaService,
 	) {
 		this.app = express();
 		this.port = 8000;
@@ -39,6 +43,7 @@ export class App {
 		this.useMiddleware();
 		this.useRoutes();
 		this.useExeptionFilters();
+		await this.prismaService.connect();
 		this.server = this.app.listen(this.port);
 		this.logger.log(`Сервер запущен на http://localhost:${this.port}`);
 	}
