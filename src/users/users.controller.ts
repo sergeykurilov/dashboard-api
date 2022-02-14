@@ -13,9 +13,11 @@ import { ValidateMiddleware } from '../common/validate.middleware';
 import { sign } from 'jsonwebtoken';
 import { ConfigService } from '../config/config.service';
 import { AuthGuard } from '../common/auth.guard';
+import { UserTokenDto } from './dto/user-token.dto';
 
 @injectable()
 export class UserController extends BaseController implements IUsersInterface {
+	private tokens = {};
 	constructor(
 		@inject(TYPES.UsersService) private usersService: UsersService,
 		@inject(TYPES.ILogger) private loggerService: LoggerService,
@@ -41,7 +43,44 @@ export class UserController extends BaseController implements IUsersInterface {
 				func: this.info,
 				middlewares: [new AuthGuard()],
 			},
+			{
+				path: '/token',
+				method: 'post',
+				func: this.token,
+				middlewares: [],
+			},
 		]);
+	}
+
+	async token(req: Request<{}, {}, UserTokenDto & UserLoginDto>, res: Response): Promise<void> {
+		const { refreshToken } = req.body;
+		if (refreshToken) {
+			const jwt = await this.signJWT(
+				req.body.email,
+				this.configService.get('SECRET'),
+				this.configService.get('tokenLife'),
+			);
+			const refresh = await this.signJWT(
+				req.body.email,
+				this.configService.get('refreshTokenSecret'),
+				this.configService.get('refreshTokenLife'),
+			);
+			const response = {
+				token: jwt,
+				refresh: refresh,
+			};
+
+			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+			// @ts-ignore
+			this.tokens.refreshToken.token = jwt;
+			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+			// @ts-ignore
+			this.tokens.refreshToken.refreshToken = refresh;
+
+			res.status(200).json(response);
+		} else {
+			res.status(404).send('Invalid request');
+		}
 	}
 
 	async login(
@@ -51,10 +90,29 @@ export class UserController extends BaseController implements IUsersInterface {
 	): Promise<void> {
 		const result = await this.usersService.validateUser(req.body);
 		if (!result) {
-			return next(new HTTPError(401, 'ошибка авторизации', 'login'));
+			return next(new HTTPError(401, 'ошибка авторизации.', 'login'));
 		}
-		const jwt = await this.signJWT(req.body.email, this.configService.get('SECRET'));
-		this.ok(res, { jwt: jwt });
+		const jwt = await this.signJWT(
+			req.body.email,
+			this.configService.get('SECRET'),
+			this.configService.get('tokenLife'),
+		);
+		const refreshJWT = await this.signJWT(
+			req.body.email,
+			this.configService.get('refreshTokenSecret'),
+			this.configService.get('refreshTokenLife'),
+		);
+
+		const response = {
+			status: 'Logged in',
+			token: jwt,
+			refreshToken: refreshJWT,
+		};
+		// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+		// @ts-ignore
+		this.tokens['refreshToken'] = response;
+		console.log(this.tokens);
+		this.ok(res, response);
 	}
 
 	async register(
@@ -82,7 +140,7 @@ export class UserController extends BaseController implements IUsersInterface {
 		});
 	}
 
-	private signJWT(email: string, secret: string): Promise<string> {
+	private signJWT(email: string, secret: string, tokenLife: string): Promise<string> {
 		return new Promise<string>((resolve, reject) => {
 			sign(
 				{
@@ -92,6 +150,7 @@ export class UserController extends BaseController implements IUsersInterface {
 				secret,
 				{
 					algorithm: 'HS256',
+					expiresIn: tokenLife,
 				},
 				(err, token) => {
 					if (err) {
